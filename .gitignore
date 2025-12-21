@@ -27,7 +27,7 @@
 
 # =========================
 # Websocket server (Node.js)
-/websocket_server/node_modules/§
+/websocket_server/node_modules/
 /websocket_server/npm-debug.log
 /websocket_server/yarn-error.log
 /websocket_server/pnpm-debug.log

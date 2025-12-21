@@ -1,0 +1,95 @@
+version: "3.8"
+
+services:
+  laravel.test:
+    build:
+      context: ./backend/vendor/laravel/sail/runtimes/8.2
+      dockerfile: Dockerfile
+      args:
+        WWWUSER: '${WWWUSER:-1000}'
+        WWWGROUP: '${WWWGROUP:-1000}'
+    image: sail-8.2/app
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    ports:
+      - '${APP_PORT:-80}:80'
+    environment:
+      WWWUSER: '${WWWUSER:-1000}'
+      WWWGROUP: '${WWWGROUP:-1000}'
+      LARAVEL_SAIL: 1
+      XDEBUG_MODE: '${SAIL_XDEBUG_MODE:-off}'
+      XDEBUG_CONFIG: '${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}'
+      IGNITION_LOCAL_SITES_PATH: '${PWD}/backend'
+      DB_HOST: mysql
+      DB_DATABASE: '${DB_DATABASE:-laravel}'
+      DB_USERNAME: '${DB_USERNAME:-sail}'
+      DB_PASSWORD: '${DB_PASSWORD:-password}'
+    volumes:
+      - './backend:/var/www/html'
+      - './start-dev.sh:/usr/local/bin/start-dev.sh'
+    entrypoint: ["/usr/local/bin/start-dev.sh"]
+    networks:
+      - sail
+    depends_on:
+      - mysql
+
+  mysql:
+    image: 'mysql/mysql-server:8.0'
+    container_name: mysql
+    ports:
+      - '${FORWARD_DB_PORT:-3306}:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: '${DB_PASSWORD:-password}'
+      MYSQL_ROOT_HOST: '%'
+      MYSQL_DATABASE: '${DB_DATABASE:-laravel}'
+      MYSQL_USER: '${DB_USERNAME:-sail}'
+      MYSQL_PASSWORD: '${DB_PASSWORD:-password}'
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+    volumes:
+      - 'sail-mysql:/var/lib/mysql'
+      - './backend/vendor/laravel/sail/database/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh'
+    networks:
+      - sail
+    healthcheck:
+      test:
+        - CMD
+        - mysqladmin
+        - ping
+        - '-p${DB_PASSWORD:-password}'
+      retries: 3
+      timeout: 5s
+
+  frontend:
+    image: node:20
+    working_dir: /app
+    volumes:
+      - './frontend:/app'
+      - node_modules:/app/node_modules
+    ports:
+      - '5173:5173'
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    networks:
+      - sail
+    depends_on:
+      - laravel.test
+
+  websocket:
+    image: node:20
+    working_dir: /app
+    volumes:
+      - ./websocket_server:/app
+    command: node index.js
+    ports:
+      - "8080:8080"
+    networks:
+      - sail
+
+networks:
+  sail:
+    driver: bridge
+
+volumes:
+  sail-mysql:
+    driver: local
+  node_modules:
+    driver: local

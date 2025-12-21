@@ -5,20 +5,40 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Laravel\Passport\Client;
 
 class AuthController extends Controller
 {
-    private function passportAuthenticationData($username, $password)
+    /**
+     * Get password grant client from DB
+     */
+    private function getPasswordGrantClient(): Client
     {
+        return Client::where('password_client', true)
+                     ->where('revoked', false)
+                     ->firstOrFail();
+    }
+
+    /**
+     * Prepare data for /oauth/token
+     */
+    private function passportAuthenticationData(string $username, string $password): array
+    {
+        $client = $this->getPasswordGrantClient();
+
         return [
-            'grant_type' => 'password',
-            'client_id' => env('PASSPORT_CLIENT_ID'),
-            'client_secret' => env('PASSPORT_CLIENT_SECRET'),
-            'username' => $username,
-            'password' => $password,
-            'scope' => ''
+            'grant_type'    => 'password',
+            'client_id'     => $client->id,
+            'client_secret' => $client->secret,
+            'username'      => $username,
+            'password'      => $password,
+            'scope'         => '',
         ];
     }
+
+    /**
+     * Login user
+     */
     public function login(Request $request)
     {
         // Find the user by username
@@ -43,10 +63,7 @@ class AuthController extends Controller
             request()->request->add(
                 $this->passportAuthenticationData($request->username, $request->password)
             );
-            $request = Request::create(
-                env('PASSPORT_SERVER_URL') . '/oauth/token',
-                'POST'
-            );
+            $request = Request::create('/oauth/token', 'POST');
             $response = Route::dispatch($request);
             $errorCode = $response->getStatusCode();
             $auth_server_response = json_decode((string) $response->content(), true);
@@ -55,13 +72,22 @@ class AuthController extends Controller
             return response()->json(["message" => 'Authentication has failed!'], 401);
         }
     }
-
+    
+    /**
+     * Logout user
+     */
     public function logout(Request $request)
     {
-        $accessToken = $request->user()->token();
-        $token = $request->user()->tokens->find($accessToken);
-        $token->revoke();
-        $token->delete();
-        return response(['msg' => 'Token revoked'], 200);
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['message' => 'No authenticated user'], 401);
+        }
+
+        $user->tokens()->each(function ($token) {
+            $token->revoke();
+            $token->delete();
+        });
+
+        return response()->json(['message' => 'Token revoked'], 200);
     }
 }

@@ -126,6 +126,13 @@ return [
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],
+        
+        'soc' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/soc.json'),
+            'level' => 'info',
+            'tap' => [App\Logging\JsonLogFormatter::class],
+        ]
     ],
 
 ];

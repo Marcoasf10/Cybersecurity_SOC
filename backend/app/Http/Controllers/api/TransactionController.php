@@ -54,45 +54,53 @@ class TransactionController extends Controller
         // this makes so that only debit transations (the one made by users) validate the confirmation_code
         // and the balance of the user (adminds dont have balance)
 
+        $sender = VCard::where('phone_number', $request->vcard)->first();
+
         if ($request->type != 'C') {
             // verify if confirmation code is the correct one of the user
             $vcardOrigin = VCard::where('phone_number', $request->vcard)->first();
             if (!password_verify($request->confirmation_code, $vcardOrigin->confirmation_code)) {
+                $this->logDenied($request, 'invalid_confirmation_code');
                 return response()->json(['message' => 'Invalid confirmation code'], 422);
             }
 
             // verify if sender has enough money on account balance
             if ($vcardOrigin->balance < $request->value) {
+                $this->logDenied($request, 'insufficient_balance');
                 return response()->json(['message' => 'Insuficient balance'], 422);
             }
 
             // verify if value being sent is higher than max_debit (invalid)
             if ($request->value > $vcardOrigin->max_debit) {
+                $this->logDenied($request, 'max_debit_exceeded');
                 return response()->json(['message' => 'Value higher than maximum debit allowed'], 422);
             }
 
             // verify if sender is not sending money to himself
             if ($request->vcard == $request->payment_reference) {
+                $this->logDenied($request, 'self_transfer');
                 return response()->json(['message' => 'You cannot send money to yourself'], 422);
             }
         }
 
         // verify if value being sent is at least 0.01€
         if ($request->value < 0.01) {
+            $this->logDenied($request, 'amount_too_small');
             return response()->json(['message' => 'Minimum transfer amount is 0.01€'], 422);
         }
-
+        
         // VCARD
-
         if ($request->payment_type == 'VCARD') {
             // Verify if destination vcard exists or is blocked
             $destinVCard = VCard::where('phone_number', $request->payment_reference)->first();
             if (!$destinVCard || $destinVCard->blocked == 1) {
+                $this->logDenied($request, 'receiver_invalid_or_blocked');
                 return response()->json(['message' => $request->payment_reference . ' does not exist or is blocked'], 404);
             }
 
             try {
-                DB::transaction(function () use ($request) {
+
+                DB::transaction(function () use ($request, $sender, $destinVCard) {
 
                     $date = date('Y-m-d');
                     $datetime = date('Y-m-d H:i:s');
@@ -105,7 +113,7 @@ class TransactionController extends Controller
                         $transaction1->datetime = $datetime;
                         $transaction1->type = 'D'; // como o utilizador está a enviar dinheiro, a primeira operação é sempre Debito
                         $transaction1->value = $request->value;
-                        $vcardBalance = VCard::where('phone_number', $request->vcard)->first()->balance;
+                        $vcardBalance = $sender->balance;
                         $transaction1->old_balance = $vcardBalance;
                         $transaction1->new_balance = $vcardBalance - $request->value;
                         $transaction1->payment_type = $request->payment_type;
@@ -123,7 +131,7 @@ class TransactionController extends Controller
                     $transaction2->datetime = $datetime;
                     $transaction2->type = 'C'; // tendo em conta esta operaçao ser a inversa, esta será de Crédito
                     $transaction2->value = $request->value;
-                    $payment_referenceBalance = VCard::where('phone_number', $request->payment_reference)->first()->balance;
+                    $payment_referenceBalance = $destinVCard->balance;
                     $transaction2->old_balance = $payment_referenceBalance;
                     $transaction2->new_balance = $payment_referenceBalance + $request->value;
                     $transaction2->payment_type = $request->payment_type;
@@ -148,18 +156,31 @@ class TransactionController extends Controller
                         $transaction2->save();
 
                         // Update both individual's balances
-                        VCard::where('phone_number', $request->vcard)->update(['balance' => $transaction1->new_balance]);
-                        VCard::where('phone_number', $request->payment_reference)->update(['balance' => $transaction2->new_balance]);
+                        $sender->update(['balance' => $transaction1->new_balance]);
+                        $destinVCard->update(['balance' => $transaction2->new_balance]);
                     } else {
                         $transaction2->save();
-                        VCard::where('phone_number', $request->payment_reference)->update(['balance' => $transaction2->new_balance]);
+                        $destinVCard->update(['balance' => $transaction2->new_balance]);
                     }
 
                 });
-
+                
+                Log::channel('soc')->info('transaction.created', [
+                    'event_type' => 'transaction.created',
+                    'transaction_id' => $transaction1?->id ?? $transaction2->id,
+                    'user_id' => auth()->id(),
+                    'amount' => $request->value,
+                    'currency' => 'EUR',
+                    'from_card' => $this->mask($sender->phone_number),
+                    'to_card' => $this->mask($destinVCard->phone_number),
+                    'payment_type' => 'VCARD',
+                    'ip' => request()->ip(),
+                    'timestamp' => now()->toIso8601String()
+                ]);
 
 
             } catch (\Exception $e) {
+                $this->logFailed($request, 'db_error');
                 return response()->json([
                     'message' => 'Error creating transaction',
                     'error' => $e->getMessage()
@@ -181,16 +202,15 @@ class TransactionController extends Controller
 
             // Check the response and handle accordingly
             if (!$response->successful()) {
+                $this->logFailed($request, 'external_api_failure');
+
                 $responseData = $response->json(); // Parse JSON response
                 $message = isset($responseData['message']) ? $responseData['message'] : '(api) Error sending transaction';
                 return response()->json(['message' => $message], $response->status());
             }
-
-
-            $vcard = VCard::where('phone_number', $request->vcard)->first();
-
+            
             try {
-                DB::transaction(function () use ($request, $vcard) {
+                DB::transaction(function () use ($request, $sender) {
                     // Money sending transaction
                     $transaction = new Transaction();
 
@@ -199,7 +219,7 @@ class TransactionController extends Controller
                     $transaction->datetime = date('Y-m-d H:i:s');
                     $transaction->type = $request->type;
                     $transaction->value = $request->value;
-                    $vcardBalance = $vcard->balance;
+                    $vcardBalance = $sender->balance;
                     $transaction->old_balance = $vcardBalance;
                     $transaction->new_balance = ($request->type == 'D') ? $vcardBalance - $request->value : $vcardBalance + $request->value;
                     $transaction->payment_type = $request->payment_type;
@@ -213,16 +233,27 @@ class TransactionController extends Controller
 
                     // give the user 1 spin for every 10 euros sent if it wasn't a credit transaction made by the admin
                     if ($request->type != 'C') {
-                        $vcard->spins += floor($request->value / 10);
-                        VCard::where('phone_number', $request->vcard)->update(['spins' => $vcard->spins, 'balance' => $transaction->new_balance]);
+                        $sender->spins += floor($request->value / 10);
+                        $sender->update(['spins' => $sender->spins, 'balance' => $transaction->new_balance]);
                     }
 
-                    VCard::where('phone_number', $request->vcard)->update(['balance' => $transaction->new_balance]);
+                    $sender->update(['balance' => $transaction->new_balance]);
 
 
                 });
 
-
+                Log::channel('soc')->info('transaction.created', [
+                    'event_type' => 'transaction.created',
+                    'transaction_id' => $transaction->id,
+                    'user_id' => auth()->id(),
+                    'amount' => $request->value,
+                    'currency' => 'EUR',
+                    'from_card' => $this->mask($sender->phone_number),
+                    'external' => true,
+                    'payment_type' => $request->payment_type,
+                    'ip' => request()->ip(),
+                    'timestamp' => now()->toIso8601String()
+                ]);
 
             } catch (\Exception $e) {
                 return response()->json([
@@ -242,10 +273,6 @@ class TransactionController extends Controller
             return response()->json(['message' => "{$request->value}€ sent to {$request->vcard} successfully"], 200);
 
     }
-
-
-
-
 
     /**
      * Update the specified resource in storage.
@@ -330,5 +357,39 @@ class TransactionController extends Controller
             'transactionCounts' => $transactionCounts,
             'averageTransactionAmounts' => $averageTransactionAmounts,
         ]);
+    }
+
+    // ---------------- SOC HELPERS ----------------
+
+    private function logDenied($request, $reason)
+    {
+        Log::channel('soc')->warning('transaction.denied', [
+            'event_type' => 'transaction.denied',
+            'user_id' => auth()->id(),
+            'reason' => $reason,
+            'amount' => $request->value,
+            'from_card' => $this->mask($request->vcard),
+            'to_card' => $this->mask($request->payment_reference),
+            'ip' => request()->ip(),
+            'timestamp' => now()->toIso8601String()
+        ]);
+    }
+
+    private function logFailed($request, $reason)
+    {
+        Log::channel('soc')->error('transaction.failed', [
+            'event_type' => 'transaction.failed',
+            'user_id' => auth()->id(),
+            'reason' => $reason,
+            'amount' => $request->value,
+            'from_card' => $this->mask($request->vcard),
+            'ip' => request()->ip(),
+            'timestamp' => now()->toIso8601String()
+        ]);
+    }
+
+    private function mask($v)
+    {
+        return '********' . substr($v, -4);
     }
 }

@@ -1,0 +1,43 @@
+<group name="laravel_soc">
+
+  <!-- Base Laravel JSON log -->
+  <rule id="100100" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="message">\.+</field>
+    <description>Laravel application log detected</description>
+  </rule>
+
+  <!-- Brute force detection -->
+  <rule id="100101" level="10" frequency="5" timeframe="60">
+    <if_matched_sid>100100</if_matched_sid>
+    <field name="context.event_type">auth.failed</field>
+    <description>SOC-LARAVEL-001: Brute Force Attempt Detected</description>
+    <group>attack,authentication_failed</group>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!-- Restricted endpoint access -->
+  <rule id="100102" level="7">
+    <if_sid>100100</if_sid>
+    <field name="context.endpoint">admin|dashboard|manage</field>
+    <description>SOC-LARAVEL-003: Access attempt to restricted endpoint</description>
+    <group>attack,web,access_control</group>
+    <mitre>
+      <id>T1087</id>
+    </mitre>
+  </rule>
+
+  <!-- SQL Injection -->
+  <rule id="100103" level="12">
+    <if_sid>100100</if_sid>
+    <field name="message">SQLSTATE|syntax error|QueryException|UNION SELECT</field>
+    <description>SOC-LARAVEL-002: SQL Injection pattern detected</description>
+    <group>attack,sql_injection</group>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+  </rule>
+
+</group>

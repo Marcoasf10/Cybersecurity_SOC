@@ -100,8 +100,8 @@ services:
     volumes:
       - wazuh-data:/var/ossec/data
       - ./siem/wazuh/rules:/var/ossec/etc/rules
-      - ./siem/wazuh/ossec.conf:/var/ossec/etc/ossec.conf # Mount your custom config
-      - ./backend/storage/logs:/var/ossec/logs/laravel_logs:ro # Mount the logs here
+      - ./siem/wazuh/ossec.conf:/var/ossec/etc/ossec.conf 
+      - ./backend/storage/logs:/var/ossec/logs/laravel_logs:rw 
     networks:
       - sail
     depends_on:

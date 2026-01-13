@@ -1,7 +1,7 @@
 <group name="laravel_soc">
 
   <rule id="100100" level="3">
-    <decoded_as>json</decoded_as>
+    <match>local.INFO|local.ERROR|local.DEBUG|local.CRITICAL</match>
     <description>Laravel application log detected</description>
   </rule>
 
@@ -10,9 +10,7 @@
     <match>auth.failed</match>
     <description>SOC-LARAVEL-001: Brute Force Attempt Detected</description>
     <group>laravel_socattack,authentication_failed</group>
-    <mitre>
-      <id>T1110</id>
-    </mitre>
+    <mitre><id>T1110</id></mitre>
   </rule>
 
   <rule id="100102" level="7">
@@ -20,9 +18,7 @@
     <match>admin|dashboard|manage</match>
     <description>SOC-LARAVEL-003: Access attempt to restricted endpoint</description>
     <group>laravel_socattack,web,access_control</group>
-    <mitre>
-      <id>T1087</id>
-    </mitre>
+    <mitre><id>T1087</id></mitre>
   </rule>
 
   <rule id="100103" level="12">
@@ -30,9 +26,7 @@
     <match>SQLSTATE|syntax error|QueryException|UNION SELECT</match>
     <description>SOC-LARAVEL-002: SQL Injection pattern detected</description>
     <group>laravel_socattack,sql_injection</group>
-    <mitre>
-      <id>T1190</id>
-    </mitre>
+    <mitre><id>T1190</id></mitre>
   </rule>
 
 </group>

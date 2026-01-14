@@ -6,7 +6,7 @@
   </rule>
 
   <rule id="100101" level="10" frequency="5" timeframe="60">
-    <if_matched_sid>100100</if_matched_sid>
+    <if_sid>100100</if_sid>
     <match>auth.failed</match>
     <description>SOC-LARAVEL-001: Brute Force Attempt Detected</description>
     <group>laravel_socattack,authentication_failed</group>
@@ -23,10 +23,38 @@
 
   <rule id="100103" level="12">
     <if_sid>100100</if_sid>
-    <match>SQLSTATE|syntax error|QueryException|UNION SELECT</match>
-    <description>SOC-LARAVEL-002: SQL Injection pattern detected</description>
+    <match>SQLSTATE|syntax error|QueryException|UNION SELECT|OR 1=1</match>
+    <description>SOC-LARAVEL-002: SQL injection pattern detected</description>
     <group>laravel_socattack,sql_injection</group>
     <mitre><id>T1190</id></mitre>
   </rule>
 
+  <rule id="110110" level="12" frequency="5" timeframe="60">
+    <if_sid>100100</if_sid>
+    <match>/oauth/token</match>
+    <same_srcip />
+    <description>APP-OAUTH-001: Excessive OAuth token requests</description>
+    <group>auth,oauth,laravel</group>
+    <mitre><id>T1078</id></mitre>
+  </rule>
+
+  <rule id="110140" level="8">
+    <if_sid>100100</if_sid>
+    <match>TRANSFER</match>
+    <description>APP-TRANSFER-001: Transfer operation detected</description>
+    <group>app,transactions</group>
+  </rule>
+
+  <rule id="210001" level="14" timeframe="900">
+    <if_matched_sid>100101</if_matched_sid>
+    <same_srcip />
+    <match>login success|Authenticated|Successful login</match>
+    <description>APP-CORR-001: Brute force followed by successful login (ATO)</description>
+    <group>correlation,auth,ato</group>
+    <mitre>
+      <id>T1110</id>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+  
 </group>

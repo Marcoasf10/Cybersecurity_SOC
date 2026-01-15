@@ -100,6 +100,7 @@ services:
       - wazuh-data:/var/ossec/data
       - ./siem/wazuh/rules:/var/ossec/etc/rules
       - ./siem/wazuh/ossec.conf:/var/ossec/etc/ossec.conf
+      - ./siem/wazuh/decoders:/var/ossec/etc/decoders:rw
       - ./backend/storage/logs:/var/ossec/logs/laravel_logs:rw
     networks:
       - sail

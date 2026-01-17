@@ -2,7 +2,7 @@
 
   <rule id="1002" level="2" overwrite="yes">
     <decoded_as>json</decoded_as>
-    <location>/var/ossec/logs/laravel_logs/laravel.log</location>
+    <location>/var/ossec/logs/laravel_logs/soc.json</location>
     <description>Laravel SOC structured log event</description>
     <group>laravel_soc</group>
   </rule>

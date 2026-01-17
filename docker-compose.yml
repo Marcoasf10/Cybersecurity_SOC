@@ -93,14 +93,14 @@ services:
       - INDEXER_USERNAME=admin
       - INDEXER_PASSWORD=admin
     ports:
+      - "1514:1514"
       - "1514:1514/udp"
       - "1515:1515"
       - "55000:55000"
     volumes:
       - wazuh-data:/var/ossec/data
-      - ./siem/wazuh/rules:/var/ossec/etc/rules
-      - ./siem/wazuh/ossec.conf:/var/ossec/etc/ossec.conf
-      - ./siem/wazuh/decoders:/var/ossec/etc/decoders:rw
+      - ./siem/wazuh/ossec.conf:/var/ossec/etc/ossec.conf:ro
+      - ./siem/wazuh/rules/laravel_rules.xml:/var/ossec/etc/rules/local_rules.xml:rw
       - ./backend/storage/logs:/var/ossec/logs/laravel_logs:rw
     networks:
       - sail

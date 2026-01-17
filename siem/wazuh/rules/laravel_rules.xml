@@ -1,16 +1,17 @@
 <group name="laravel_soc">
 
-  <rule id="100100" level="2">
-    <field name="message">.+</field>
+  <rule id="1002" level="2" overwrite="yes">
+    <decoded_as>json</decoded_as>
+    <location>/var/ossec/logs/laravel_logs/laravel.log</location>
     <description>Laravel SOC structured log event</description>
     <group>laravel_soc</group>
   </rule>
 
   <rule id="100101" level="10" frequency="3" timeframe="60">
-    <if_matched_sid>100100</if_matched_sid>
+    <if_matched_sid>1002</if_matched_sid>
     <field name="context.event_type">auth.failed</field>
-    <same_srcip />
-    <description>SOC-LARAVEL-001: Brute force login attempt detected</description>
+    <same_field>context.ip</same_field>
+    <description>SOC-LARAVEL-001: Brute force login attempt detected from $(context.ip)</description>
     <group>laravel_soc,authentication_failed,attack</group>
     <mitre>
       <id>T1110</id>
@@ -21,8 +22,8 @@
     <if_matched_sid>100101</if_matched_sid>
     <field name="context.status">200</field>
     <field name="context.endpoint">api/login</field>
-    <same_srcip />
-    <description>APP-CORR-001: Brute force followed by successful login (ATO)</description>
+    <same_field>context.ip</same_field>
+    <description>APP-CORR-001: Brute force followed by successful login (ATO) from $(context.ip)</description>
     <group>correlation,auth,ato</group>
     <mitre>
       <id>T1110</id>
@@ -31,9 +32,9 @@
   </rule>
 
   <rule id="100102" level="8">
-    <if_sid>100100</if_sid>
+    <if_sid>1002</if_sid>
     <field name="context.endpoint">admin|dashboard|manage</field>
-    <description>SOC-LARAVEL-003: Restricted endpoint access attempt</description>
+    <description>SOC-LARAVEL-003: Restricted endpoint access attempt: $(context.endpoint)</description>
     <group>laravel_soc,web,access_control</group>
     <mitre>
       <id>T1087</id>
@@ -41,7 +42,7 @@
   </rule>
 
   <rule id="100103" level="12">
-    <if_sid>100100</if_sid>
+    <if_sid>1002</if_sid>
     <field name="message">SQLSTATE|UNION SELECT|OR 1=1</field>
     <description>SOC-LARAVEL-002: SQL injection attempt detected</description>
     <group>laravel_soc,sql_injection</group>
@@ -51,10 +52,10 @@
   </rule>
 
   <rule id="110110" level="12" frequency="5" timeframe="60">
-    <if_matched_sid>100100</if_matched_sid>
+    <if_matched_sid>1002</if_matched_sid>
     <field name="context.endpoint">/oauth/token</field>
-    <same_srcip />
-    <description>APP-OAUTH-001: Excessive OAuth token requests</description>
+    <same_field>context.ip</same_field>
+    <description>APP-OAUTH-001: Excessive OAuth token requests from $(context.ip)</description>
     <group>auth,oauth,laravel</group>
     <mitre>
       <id>T1078</id>
@@ -62,7 +63,7 @@
   </rule>
 
   <rule id="110140" level="6">
-    <if_sid>100100</if_sid>
+    <if_sid>1002</if_sid>
     <field name="context.event_type">transaction.created</field>
     <description>APP-TRANSFER-001: Transfer operation detected</description>
     <group>app,transactions,laravel_soc</group>
@@ -71,32 +72,30 @@
   <rule id="110141" level="10">
     <if_sid>110140</if_sid>
     <field name="context.amount" operation="ge">250</field>
-    <description>APP-TRANSFER-002: High-value transfer detected</description>
+    <description>APP-TRANSFER-002: High-value transfer detected ($$(context.amount))</description>
     <group>app,transactions,financial_risk</group>
     <mitre>
       <id>T1566</id>
     </mitre>
   </rule>
 
+  <rule id="110142" level="12" frequency="3" timeframe="120">
+    <if_matched_sid>110140</if_matched_sid>
+    <same_field>context.ip</same_field>
+    <description>APP-TRANSFER-003: Multiple rapid transfers detected from $(context.ip)</description>
+    <group>transactions,fraud</group>
+  </rule>
+
   <rule id="210002" level="14" timeframe="900">
-  <if_matched_sid>210001</if_matched_sid>
-    <field name="rule_id_chain">110140</field>
-    <same_srcip />
-    <description>
-      APP-CORR-002: Transfer executed after account takeover
-    </description>
+    <if_matched_sid>210001</if_matched_sid>
+    <if_matched_sid>110140</if_matched_sid>
+    <same_field>context.ip</same_field>
+    <description>APP-CORR-002: Transfer executed after account takeover from $(context.ip)</description>
     <group>correlation,ato,financial_fraud</group>
     <mitre>
       <id>T1110</id>
       <id>T1078</id>
     </mitre>
-  </rule>
-
-  <rule id="110142" level="12" frequency="3" timeframe="120">
-    <if_matched_sid>110140</if_matched_sid>
-    <same_srcip />
-    <description>APP-TRANSFER-003: Multiple rapid transfers detected</description>
-    <group>transactions,fraud</group>
   </rule>
 
 </group>

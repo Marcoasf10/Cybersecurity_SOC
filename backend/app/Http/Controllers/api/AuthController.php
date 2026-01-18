@@ -42,6 +42,9 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
+        // Get the real client IP at the start
+        $ip = $request->ip();
+        
         // Find the user by username
         $user = User::withTrashed()->where('username', $request->username)->first();
 
@@ -67,9 +70,9 @@ class AuthController extends Controller
             request()->request->add(
                 $this->passportAuthenticationData($request->username, $request->password)
             );
-            $request = Request::create('/oauth/token', 'POST');
+            $tokenRequest = Request::create('/oauth/token', 'POST');
             
-            $response = Route::dispatch($request);
+            $response = Route::dispatch($tokenRequest);
             $status = $response->getStatusCode();
             $data = json_decode((string) $response->content(), true);
 
@@ -78,7 +81,7 @@ class AuthController extends Controller
                     'event_type' => 'auth.success',
                     'user_id' => $user->id,
                     'username' => $user->username,
-                    'ip' => $request->ip(),
+                    'ip' => $ip,  // Use the $ip variable we defined at the start
                     'timestamp' => now()->toIso8601String()
                 ]);
             } else {
@@ -87,12 +90,11 @@ class AuthController extends Controller
 
             return response()->json($data, $status);
         } catch (\Exception $e) {
-
             $this->logAuthFailure(
                 $user?->id,
                 $request->username,
                 'passport_exception',
-                $request->ip()
+                $ip  // Use the $ip variable
             );
 
             return response()->json(["message" => 'Authentication has failed!'], 401);

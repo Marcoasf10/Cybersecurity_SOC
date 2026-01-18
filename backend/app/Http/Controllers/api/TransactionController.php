@@ -163,22 +163,20 @@ class TransactionController extends Controller
                         $destinVCard->update(['balance' => $transaction2->new_balance]);
                     }
 
+                     Log::channel('soc')->info('transaction.created', [
+                        'event_type' => 'transaction.created',
+                        'transaction_id' => $transaction1?->id ?? $transaction2->id,
+                        'user_id' => auth()->id(),
+                        'amount' => $request->value,
+                        'currency' => 'EUR',
+                        'from_card' => $this->mask($sender->phone_number),
+                        'to_card' => $this->mask($destinVCard->phone_number),
+                        'payment_type' => 'VCARD',
+                        'ip' => request()->ip(),
+                        'timestamp' => now()->toIso8601String()
+                    ]);
                 });
                 
-                Log::channel('soc')->info('transaction.created', [
-                    'event_type' => 'transaction.created',
-                    'transaction_id' => $transaction1?->id ?? $transaction2->id,
-                    'user_id' => auth()->id(),
-                    'amount' => $request->value,
-                    'currency' => 'EUR',
-                    'from_card' => $this->mask($sender->phone_number),
-                    'to_card' => $this->mask($destinVCard->phone_number),
-                    'payment_type' => 'VCARD',
-                    'ip' => request()->ip(),
-                    'timestamp' => now()->toIso8601String()
-                ]);
-
-
             } catch (\Exception $e) {
                 $this->logFailed($request, 'db_error');
                 return response()->json([
@@ -239,21 +237,21 @@ class TransactionController extends Controller
 
                     $sender->update(['balance' => $transaction->new_balance]);
 
+                    Log::channel('soc')->info('transaction.created', [
+                        'event_type' => 'transaction.created',
+                        'transaction_id' => $transaction->id,
+                        'user_id' => auth()->id(),
+                        'amount' => $request->value,
+                        'currency' => 'EUR',
+                        'from_card' => $this->mask($sender->phone_number),
+                        'to_card' => $this->mask($request->payment_reference),
+                        'payment_type' => $request->payment_type,
+                        'external' => true,
+                        'ip' => request()->ip(),
+                        'timestamp' => now()->toIso8601String()
+                    ]);
 
                 });
-
-                Log::channel('soc')->info('transaction.created', [
-                    'event_type' => 'transaction.created',
-                    'transaction_id' => $transaction->id,
-                    'user_id' => auth()->id(),
-                    'amount' => $request->value,
-                    'currency' => 'EUR',
-                    'from_card' => $this->mask($sender->phone_number),
-                    'external' => true,
-                    'payment_type' => $request->payment_type,
-                    'ip' => request()->ip(),
-                    'timestamp' => now()->toIso8601String()
-                ]);
 
             } catch (\Exception $e) {
                 return response()->json([

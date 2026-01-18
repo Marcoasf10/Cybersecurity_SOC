@@ -3,6 +3,9 @@
 namespace App\Exceptions;
 
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Auth\Access\AuthorizationException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -26,5 +29,24 @@ class Handler extends ExceptionHandler
         $this->reportable(function (Throwable $e) {
             //
         });
+    }
+
+    public function render($request, Throwable $exception)
+    {
+        if (
+            $exception instanceof AuthorizationException ||
+            $exception instanceof AccessDeniedHttpException
+        ) {
+            Log::channel('soc')->warning('access.denied', [
+                'event_type' => 'access.denied',
+                'user_id' => optional($request->user())->id,
+                'username' => optional($request->user())->username,
+                'endpoint' => $request->path(),
+                'method' => $request->method(),
+                'ip' => $request->ip(),
+            ]);
+        }
+
+        return parent::render($request, $exception);
     }
 }

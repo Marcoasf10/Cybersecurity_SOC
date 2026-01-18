@@ -9,6 +9,7 @@
 
   <rule id="100101" level="10" frequency="3" timeframe="60">
     <if_matched_sid>1002</if_matched_sid>
+    <if_sid>1002</if_sid>
     <field name="context.event_type">auth.failed</field>
     <same_field>context.ip</same_field>
     <description>SOC-LARAVEL-001: Brute force login attempt detected from $(context.ip)</description>
@@ -19,9 +20,8 @@
   </rule>
 
   <rule id="210001" level="14" timeframe="900">
-    <if_matched_sid>100101</if_matched_sid>
-    <field name="context.status">200</field>
-    <field name="context.endpoint">api/login</field>
+    <if_matched_sid>1002</if_matched_sid>
+    <field name="context.event_type">auth.success</field>
     <same_field>context.ip</same_field>
     <description>APP-CORR-001: Brute force followed by successful login (ATO) from $(context.ip)</description>
     <group>correlation,auth,ato</group>
@@ -33,7 +33,7 @@
 
   <rule id="100102" level="8">
     <if_sid>1002</if_sid>
-    <field name="context.endpoint">admin|dashboard|manage</field>
+    <field name="context.event_type">access.denied</field>
     <description>SOC-LARAVEL-003: Restricted endpoint access attempt: $(context.endpoint)</description>
     <group>laravel_soc,web,access_control</group>
     <mitre>

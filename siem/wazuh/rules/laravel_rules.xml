@@ -7,9 +7,15 @@
     <group>laravel_soc</group>
   </rule>
 
-  <rule id="100101" level="10" frequency="3" timeframe="60">
-    <if_matched_sid>1002</if_matched_sid>
+  <rule id="100100" level="2">
+    <if_sid>1002</if_sid>
     <field name="context.event_type">auth.failed</field>
+    <description>Authentication failure</description>
+    <group>laravel_soc,authentication_failed</group>
+  </rule>
+
+  <rule id="100101" level="10" frequency="3" timeframe="60">
+    <if_matched_sid>100100</if_matched_sid>
     <same_field>context.ip</same_field>
     <description>SOC-LARAVEL-001: Brute force login attempt detected from $(context.ip)</description>
     <group>laravel_soc,authentication_failed,attack</group>
@@ -39,8 +45,8 @@
 
   <rule id="100103" level="12">
     <if_sid>1002</if_sid>
-    <regex type="pcre2">(?i)(1=1|union|select|sqlstate|'|"|%27|%22)</regex>
-    <description>SOC-LARAVEL-002: SQL injection attempt detected</description>
+    <field name="context.username" type="pcre2">(?i)(union\s+select|select\s+.*\s+from|1\s*=\s*1|'\s+or\s+|"\s+or\s+|--|\#|\/\*)</field>
+    <description>SOC-LARAVEL-002: SQL injection attempt detected in username</description>
     <group>laravel_soc,sql_injection</group>
     <mitre>
       <id>T1190</id>
